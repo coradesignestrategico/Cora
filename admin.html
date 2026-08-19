@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CORA — Painel de Contatos</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --pink: #FF00A8;
+    --pink-deep: #D6008E;
+    --blue: #0039E4;
+    --blue-deep: #0029AD;
+    --yellow: #FFC629;
+    --cream: #FFFBF6;
+    --ink: #241534;
+    --ink-soft: #4A3A57;
+    --white: #FFFFFF;
+    --radius-lg: 28px;
+    --radius-md: 18px;
+    --ease: cubic-bezier(.22,1,.36,1);
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{
+    font-family:'Manrope',sans-serif;
+    background:var(--cream);
+    color:var(--ink);
+    min-height:100vh;
+    -webkit-font-smoothing:antialiased;
+  }
+  h1,h2,h3{font-family:'Fredoka',sans-serif;}
+  a{color:inherit;}
+  button{font-family:inherit;cursor:pointer;border:none;}
+  input{font-family:inherit;}
+
+  /* ---------- TOPBAR ---------- */
+  .topbar{
+    background:var(--pink); padding:20px 32px;
+    display:flex; align-items:center; justify-content:space-between;
+  }
+  .topbar .brand{color:var(--white); font-family:'Fredoka'; font-weight:700; font-size:1.3rem; display:flex; align-items:center; gap:10px;}
+  .topbar .brand .dot{width:10px; height:10px; border-radius:50%; background:var(--yellow);}
+  .topbar .sub{color:rgba(255,255,255,.85); font-size:.82rem; font-weight:600; margin-left:4px;}
+  #logoutBtn{
+    background:rgba(255,255,255,.16); color:var(--white); font-weight:700; font-size:.85rem;
+    padding:10px 18px; border-radius:999px; transition:background .3s var(--ease);
+  }
+  #logoutBtn:hover{background:rgba(255,255,255,.28);}
+
+  /* ---------- LOGIN ---------- */
+  .login-wrap{
+    min-height:100vh; display:flex; align-items:center; justify-content:center;
+    background:var(--pink); padding:24px;
+  }
+  .login-card{
+    background:var(--white); border-radius:var(--radius-lg);
+    padding:48px 40px; width:100%; max-width:400px;
+    box-shadow:0 30px 60px rgba(36,21,52,.25);
+  }
+  .login-card .kicker{color:var(--pink); font-weight:700; letter-spacing:.12em; text-transform:uppercase; font-size:.78rem; margin-bottom:10px;}
+  .login-card h1{font-size:1.7rem; font-weight:600; margin-bottom:8px;}
+  .login-card p{color:var(--ink-soft); font-size:.92rem; margin-bottom:28px;}
+  .field{margin-bottom:16px;}
+  .field label{display:block; font-size:.82rem; font-weight:700; margin-bottom:7px;}
+  .field input{
+    width:100%; padding:13px 16px; border-radius:14px; border:1.5px solid #E7E1EC;
+    background:#FBFAFC; font-size:.95rem; color:var(--ink);
+  }
+  .field input:focus{outline:none; border-color:var(--pink);}
+  .login-btn{
+    width:100%; background:var(--pink); color:var(--white); padding:15px; border-radius:999px;
+    font-weight:700; font-size:.98rem; margin-top:8px; transition:background .3s;
+  }
+  .login-btn:hover{background:var(--pink-deep);}
+  .login-btn:disabled{opacity:.6; cursor:default;}
+  .error-msg{color:var(--pink-deep); font-size:.85rem; font-weight:600; margin-top:14px; display:none;}
+
+  /* ---------- DASHBOARD ---------- */
+  .wrap{max-width:1180px; margin:0 auto; padding:40px 24px 80px;}
+  .head-row{display:flex; align-items:flex-end; justify-content:space-between; flex-wrap:wrap; gap:16px; margin-bottom:32px;}
+  .head-row .kicker{color:var(--pink); font-weight:700; letter-spacing:.12em; text-transform:uppercase; font-size:.78rem; margin-bottom:8px;}
+  .head-row h1{font-size:1.9rem; font-weight:600;}
+  .stat-pill{
+    background:var(--white); border-radius:999px; padding:10px 22px;
+    font-weight:700; font-size:.9rem; color:var(--blue-deep);
+    box-shadow:0 8px 20px rgba(36,21,52,.08);
+  }
+
+  .toolbar{display:flex; gap:12px; flex-wrap:wrap; margin-bottom:24px;}
+  .toolbar input{
+    flex:1; min-width:220px; padding:12px 18px; border-radius:999px; border:1.5px solid #E7E1EC;
+    background:var(--white); font-size:.92rem;
+  }
+  .toolbar input:focus{outline:none; border-color:var(--pink);}
+  .toolbar select{
+    padding:12px 18px; border-radius:999px; border:1.5px solid #E7E1EC; background:var(--white);
+    font-size:.9rem; font-family:inherit; color:var(--ink);
+  }
+
+  .contact-list{display:flex; flex-direction:column; gap:16px;}
+  .contact-card{
+    background:var(--white); border-radius:var(--radius-md); padding:24px 28px;
+    box-shadow:0 10px 26px rgba(36,21,52,.07);
+    display:grid; grid-template-columns:1fr auto; gap:18px; align-items:start;
+  }
+  .contact-main{display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:14px 24px;}
+  .c-field .c-label{font-size:.7rem; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-soft); opacity:.7; margin-bottom:3px;}
+  .c-field .c-value{font-size:.94rem; font-weight:600; color:var(--ink); word-break:break-word;}
+  .c-field .c-value.empty{color:var(--ink-soft); opacity:.4; font-weight:500;}
+  .projeto-box{grid-column:1/-1; background:#FBF7FA; border-radius:12px; padding:14px 16px; font-size:.9rem; color:var(--ink-soft); line-height:1.6;}
+  .card-side{display:flex; flex-direction:column; align-items:flex-end; gap:10px; text-align:right;}
+  .servico-tag{
+    background:var(--yellow); color:var(--ink); font-weight:700; font-size:.76rem;
+    padding:6px 14px; border-radius:999px; white-space:nowrap;
+  }
+  .date-tag{font-size:.76rem; color:var(--ink-soft); opacity:.7; white-space:nowrap;}
+  .quick-links{display:flex; gap:8px;}
+  .quick-links a{
+    width:34px; height:34px; border-radius:50%; background:var(--cream);
+    display:flex; align-items:center; justify-content:center; transition:background .25s;
+  }
+  .quick-links a:hover{background:var(--pink); color:var(--white);}
+  .quick-links svg{width:16px; height:16px; stroke:currentColor; fill:none; stroke-width:2;}
+
+  .empty-state{
+    text-align:center; padding:80px 24px; color:var(--ink-soft);
+  }
+  .empty-state h2{font-size:1.3rem; margin-bottom:8px; color:var(--ink);}
+  .loading{text-align:center; padding:60px; color:var(--ink-soft); font-weight:600;}
+
+  .hidden{display:none !important;}
+
+  @media (max-width:640px){
+    .contact-card{grid-template-columns:1fr;}
+    .card-side{flex-direction:row; align-items:center; justify-content:space-between; width:100%;}
+  }
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div class="login-wrap" id="loginWrap">
+  <div class="login-card">
+    <div class="kicker">CORA · Painel</div>
+    <h1>Área restrita</h1>
+    <p>Entre com sua conta para ver os contatos recebidos pelo site.</p>
+    <form id="loginForm">
+      <div class="field">
+        <label for="loginEmail">E-mail</label>
+        <input type="email" id="loginEmail" required autocomplete="username">
+      </div>
+      <div class="field">
+        <label for="loginPassword">Senha</label>
+        <input type="password" id="loginPassword" required autocomplete="current-password">
+      </div>
+      <button type="submit" class="login-btn" id="loginBtn">Entrar</button>
+      <p class="error-msg" id="loginError">E-mail ou senha incorretos.</p>
+    </form>
+  </div>
+</div>
+
+<!-- DASHBOARD -->
+<div id="dashboard" class="hidden">
+  <div class="topbar">
+    <div class="brand"><span class="dot"></span> CORA <span class="sub">Painel de Contatos</span></div>
+    <button id="logoutBtn">Sair</button>
+  </div>
+
+  <div class="wrap">
+    <div class="head-row">
+      <div>
+        <div class="kicker">Formulário do site</div>
+        <h1>Contatos recebidos</h1>
+      </div>
+      <div class="stat-pill" id="statPill">0 contatos</div>
+    </div>
+
+    <div class="toolbar">
+      <input type="text" id="searchInput" placeholder="Buscar por nome, e-mail ou empresa...">
+      <select id="serviceFilter">
+        <option value="">Todos os serviços</option>
+      </select>
+    </div>
+
+    <div id="listArea">
+      <div class="loading">Carregando contatos...</div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const SUPABASE_URL = 'https://doavlbqqzwryrvdvgnyz.supabase.co';
+  const SUPABASE_ANON_KEY = 'sb_publishable_vGnUXLt8ADhuhWanmaXbDQ_m8l36W31';
+
+  let session = null;
+  let allContacts = [];
+
+  const loginWrap = document.getElementById('loginWrap');
+  const dashboard = document.getElementById('dashboard');
+  const listArea = document.getElementById('listArea');
+  const statPill = document.getElementById('statPill');
+  const serviceFilter = document.getElementById('serviceFilter');
+  const searchInput = document.getElementById('searchInput');
+
+  function saveSession(s){ sessionStorage.setItem('cora_session', JSON.stringify(s)); }
+  function loadSession(){
+    try { return JSON.parse(sessionStorage.getItem('cora_session')); } catch(e){ return null; }
+  }
+  function clearSession(){ sessionStorage.removeItem('cora_session'); }
+
+  async function login(email, password){
+    const resp = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON_KEY },
+      body: JSON.stringify({ email, password })
+    });
+    if(!resp.ok) throw new Error('login failed');
+    return resp.json();
+  }
+
+  async function fetchContacts(){
+    const resp = await fetch(`${SUPABASE_URL}/rest/v1/contatos?select=*&order=criado_em.desc`, {
+      headers: {
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${session.access_token}`
+      }
+    });
+    if(!resp.ok) throw new Error('fetch failed');
+    return resp.json();
+  }
+
+  function fmtDate(iso){
+    const d = new Date(iso);
+    return d.toLocaleDateString('pt-BR', {day:'2-digit', month:'2-digit', year:'numeric'}) + ' às ' +
+           d.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'});
+  }
+
+  function val(v){
+    return v ? `<span class="c-value">${escapeHtml(v)}</span>` : `<span class="c-value empty">Não informado</span>`;
+  }
+  function escapeHtml(s){
+    return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  function renderContacts(list){
+    if(list.length === 0){
+      listArea.innerHTML = `<div class="empty-state"><h2>Nenhum contato encontrado</h2><p>Assim que alguém preencher o formulário do site, ele aparece aqui.</p></div>`;
+      return;
+    }
+    listArea.innerHTML = `<div class="contact-list">` + list.map(c => `
+      <div class="contact-card">
+        <div class="contact-main">
+          <div class="c-field"><div class="c-label">Nome</div>${val(c.nome)}</div>
+          <div class="c-field"><div class="c-label">Empresa</div>${val(c.empresa)}</div>
+          <div class="c-field"><div class="c-label">WhatsApp</div>${val(c.whatsapp)}</div>
+          <div class="c-field"><div class="c-label">E-mail</div>${val(c.email)}</div>
+          <div class="c-field"><div class="c-label">Instagram</div>${val(c.instagram)}</div>
+          <div class="c-field"><div class="c-label">Prazo</div>${val(c.prazo)}</div>
+          ${c.projeto ? `<div class="projeto-box">${escapeHtml(c.projeto)}</div>` : ''}
+        </div>
+        <div class="card-side">
+          ${c.servico ? `<span class="servico-tag">${escapeHtml(c.servico)}</span>` : ''}
+          <span class="date-tag">${fmtDate(c.criado_em)}</span>
+          <div class="quick-links">
+            ${c.email ? `<a href="mailto:${encodeURIComponent(c.email)}" title="Enviar e-mail"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg></a>` : ''}
+            ${c.whatsapp ? `<a href="https://wa.me/${c.whatsapp.replace(/\\D/g,'')}" target="_blank" title="Abrir WhatsApp"><svg viewBox="0 0 24 24"><path d="M21 11.5a8.4 8.4 0 01-8.9 8.4 8.5 8.5 0 01-4.1-1.1L3 20l1.2-4.8A8.4 8.4 0 1121 11.5z"/></svg></a>` : ''}
+          </div>
+        </div>
+      </div>
+    `).join('') + `</div>`;
+  }
+
+  function applyFilters(){
+    const q = searchInput.value.trim().toLowerCase();
+    const svc = serviceFilter.value;
+    const filtered = allContacts.filter(c => {
+      const matchesQ = !q || [c.nome,c.email,c.empresa].some(f => (f||'').toLowerCase().includes(q));
+      const matchesSvc = !svc || c.servico === svc;
+      return matchesQ && matchesSvc;
+    });
+    renderContacts(filtered);
+  }
+
+  function populateServiceFilter(){
+    const services = [...new Set(allContacts.map(c => c.servico).filter(Boolean))];
+    serviceFilter.innerHTML = '<option value="">Todos os serviços</option>' +
+      services.map(s => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join('');
+  }
+
+  async function loadDashboard(){
+    loginWrap.classList.add('hidden');
+    dashboard.classList.remove('hidden');
+    try{
+      allContacts = await fetchContacts();
+      statPill.textContent = `${allContacts.length} contato${allContacts.length === 1 ? '' : 's'}`;
+      populateServiceFilter();
+      renderContacts(allContacts);
+    }catch(err){
+      listArea.innerHTML = `<div class="empty-state"><h2>Não foi possível carregar os contatos</h2><p>Tente sair e entrar novamente.</p></div>`;
+    }
+  }
+
+  document.getElementById('loginForm').addEventListener('submit', async function(e){
+    e.preventDefault();
+    const email = document.getElementById('loginEmail').value;
+    const password = document.getElementById('loginPassword').value;
+    const btn = document.getElementById('loginBtn');
+    const errorMsg = document.getElementById('loginError');
+    errorMsg.style.display = 'none';
+    btn.disabled = true; btn.textContent = 'Entrando...';
+    try{
+      session = await login(email, password);
+      saveSession(session);
+      await loadDashboard();
+    }catch(err){
+      errorMsg.style.display = 'block';
+    }finally{
+      btn.disabled = false; btn.textContent = 'Entrar';
+    }
+  });
+
+  document.getElementById('logoutBtn').addEventListener('click', function(){
+    clearSession();
+    session = null;
+    dashboard.classList.add('hidden');
+    loginWrap.classList.remove('hidden');
+  });
+
+  searchInput.addEventListener('input', applyFilters);
+  serviceFilter.addEventListener('change', applyFilters);
+
+  // Tenta retomar sessão salva
+  (function init(){
+    const saved = loadSession();
+    if(saved && saved.access_token){
+      session = saved;
+      loadDashboard();
+    }
+  })();
+</script>
+</body>
+</html>
