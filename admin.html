@@ -225,6 +225,57 @@
   }
   function clearSession(){ sessionStorage.removeItem('cora_session'); }
 
+  function forceLogout(msg){
+    clearSession();
+    session = null;
+    dashboard.classList.add('hidden');
+    loginWrap.classList.remove('hidden');
+    if(msg){
+      const errorMsg = document.getElementById('loginError');
+      errorMsg.textContent = msg;
+      errorMsg.style.display = 'block';
+    }
+  }
+
+  async function refreshAccessToken(){
+    if(!session || !session.refresh_token) return false;
+    try{
+      const resp = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON_KEY },
+        body: JSON.stringify({ refresh_token: session.refresh_token })
+      });
+      if(!resp.ok) return false;
+      const data = await resp.json();
+      session = data;
+      saveSession(session);
+      return true;
+    }catch(e){
+      return false;
+    }
+  }
+
+  async function authFetch(url, init={}){
+    function withAuth(base){
+      const headers = Object.assign({}, base.headers, {
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${session.access_token}`
+      });
+      return Object.assign({}, base, { headers });
+    }
+    let resp = await fetch(url, withAuth(init));
+    if(resp.status === 401){
+      const ok = await refreshAccessToken();
+      if(ok){
+        resp = await fetch(url, withAuth(init));
+      } else {
+        forceLogout('Sua sessão expirou. Entre novamente.');
+        throw new Error('SESSAO_EXPIRADA');
+      }
+    }
+    return resp;
+  }
+
   async function login(email, password){
     const resp = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
       method: 'POST',
@@ -236,12 +287,7 @@
   }
 
   async function fetchContacts(){
-    const resp = await fetch(`${SUPABASE_URL}/rest/v1/contatos?select=*&order=criado_em.desc`, {
-      headers: {
-        'apikey': SUPABASE_ANON_KEY,
-        'Authorization': `Bearer ${session.access_token}`
-      }
-    });
+    const resp = await authFetch(`${SUPABASE_URL}/rest/v1/contatos?select=*&order=criado_em.desc`);
     if(!resp.ok) throw new Error('fetch failed');
     return resp.json();
   }
@@ -330,6 +376,7 @@
       saveSession(session);
       await loadDashboard();
     }catch(err){
+      errorMsg.textContent = 'E-mail ou senha incorretos.';
       errorMsg.style.display = 'block';
     }finally{
       btn.disabled = false; btn.textContent = 'Entrar';
