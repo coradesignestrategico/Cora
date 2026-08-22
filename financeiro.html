@@ -103,7 +103,6 @@
   .summary-card.entradas .s-value{color:var(--green);}
   .summary-card.saidas .s-value{color:var(--red);}
   .summary-card.saldo .s-value{color:var(--blue-deep);}
-  .summary-card.pendente .s-value{color:var(--yellow-deep, #B8860B);}
 
   /* Form */
   .form-card{
@@ -111,7 +110,7 @@
     box-shadow:0 10px 26px rgba(36,21,52,.07);
   }
   .form-card h2{font-size:1.1rem; font-weight:600; margin-bottom:18px;}
-  .form-grid{display:grid; grid-template-columns:1fr 1fr 1.4fr 1.6fr 1fr auto; gap:12px; align-items:end;}
+  .form-grid{display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:12px; align-items:end;}
   .form-grid .field{margin-bottom:0;}
   .type-toggle{display:flex; gap:8px;}
   .type-btn{
@@ -120,13 +119,25 @@
   }
   .type-btn.active.entrada{background:var(--green); border-color:var(--green); color:var(--white);}
   .type-btn.active.saida{background:var(--red); border-color:var(--red); color:var(--white);}
-  .baixado-check-wrap{display:flex; align-items:center; gap:9px; margin-top:16px; cursor:pointer; user-select:none;}
-  .baixado-check-wrap input{width:17px; height:17px; accent-color:var(--blue); cursor:pointer;}
-  .baixado-check-wrap span{font-size:.85rem; color:var(--ink-soft); font-weight:600;}
-  .baixa-toggle{display:flex; align-items:center; gap:8px; cursor:pointer; user-select:none;}
-  .baixa-toggle input{width:17px; height:17px; accent-color:var(--green); cursor:pointer;}
-  .baixa-toggle .baixa-label{font-size:.78rem; font-weight:700; padding:5px 12px; border-radius:999px; background:rgba(255,198,41,.22); color:#8a6400;}
-  .baixa-toggle.is-baixado .baixa-label{background:rgba(20,184,102,.14); color:var(--green);}
+  .banco-input{
+    width:100%; min-width:90px; padding:8px 10px; border-radius:10px; border:1.5px solid #E7E1EC;
+    background:#FBFAFC; font-size:.85rem; color:var(--ink); font-family:inherit;
+  }
+  .banco-input:focus{outline:none; border-color:var(--blue);}
+  .status-select{
+    border:1.5px solid transparent; border-radius:999px; padding:6px 14px; font-weight:700; font-size:.78rem;
+    cursor:pointer; appearance:none; -webkit-appearance:none; background-position:right 10px center;
+    background-repeat:no-repeat; background-size:12px; font-family:inherit;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23241534' stroke-width='3'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+    padding-right:30px;
+  }
+  .status-select.aberto{background-color:rgba(255,198,41,.22); color:#8a6400;}
+  .status-select.pago{background-color:rgba(20,184,102,.14); color:var(--green);}
+  .pagamento-input{
+    padding:8px 10px; border-radius:10px; border:1.5px solid #E7E1EC;
+    background:#FBFAFC; font-size:.82rem; color:var(--ink); font-family:inherit;
+  }
+  .pagamento-input:disabled{opacity:.4; background:transparent; border-color:transparent;}
   .add-btn{
     background:var(--blue); color:var(--white); padding:13px 22px; border-radius:14px;
     font-weight:700; font-size:.9rem; white-space:nowrap; transition:background .3s;
@@ -240,10 +251,6 @@
         <div class="s-label">Saldo</div>
         <div class="s-value" id="saldoTotal">R$ 0,00</div>
       </div>
-      <div class="summary-card pendente">
-        <div class="s-label">Pendente de baixa</div>
-        <div class="s-value" id="totalPendente">R$ 0,00</div>
-      </div>
     </div>
 
     <div class="form-card">
@@ -258,7 +265,7 @@
             </div>
           </div>
           <div class="field">
-            <label for="txnData">Data</label>
+            <label for="txnData">Vencimento</label>
             <input type="date" id="txnData" required>
           </div>
           <div class="field">
@@ -273,12 +280,23 @@
             <label for="txnValor">Valor (R$)</label>
             <input type="number" id="txnValor" step="0.01" min="0" placeholder="0,00" required>
           </div>
+          <div class="field">
+            <label for="txnBanco">Banco</label>
+            <input type="text" id="txnBanco" placeholder="Ex: Nubank, Itaú...">
+          </div>
+          <div class="field">
+            <label for="txnStatus">Status</label>
+            <select id="txnStatus">
+              <option value="aberto">Em aberto</option>
+              <option value="pago">Pago</option>
+            </select>
+          </div>
+          <div class="field" id="txnDataPagamentoWrap" style="display:none;">
+            <label for="txnDataPagamento">Data do pagamento</label>
+            <input type="date" id="txnDataPagamento">
+          </div>
           <button type="submit" class="add-btn">Adicionar</button>
         </div>
-        <label class="baixado-check-wrap">
-          <input type="checkbox" id="txnBaixado">
-          <span>Já foi baixado (dinheiro já entrou/saiu de fato)</span>
-        </label>
       </form>
     </div>
 
@@ -292,11 +310,11 @@
         <option value="saida">Só saídas</option>
       </select>
       <select id="filterBaixado">
-        <option value="">Pendentes e baixados</option>
-        <option value="pendente">Só pendentes</option>
-        <option value="baixado">Só baixados</option>
+        <option value="">Em aberto e pagos</option>
+        <option value="pendente">Só em aberto</option>
+        <option value="baixado">Só pagos</option>
       </select>
-      <input type="text" id="searchInput" placeholder="Buscar por categoria ou descrição...">
+      <input type="text" id="searchInput" placeholder="Buscar por categoria, descrição ou banco...">
     </div>
 
     <div id="listArea">
@@ -362,7 +380,7 @@
     if(!resp.ok) throw new Error('create failed');
   }
 
-  async function updateTxnBaixado(id, baixado){
+  async function updateTxnStatus(id, baixado, data_pagamento){
     const resp = await fetch(`${SUPABASE_URL}/rest/v1/financeiro?id=eq.${id}`, {
       method: 'PATCH',
       headers: {
@@ -371,7 +389,21 @@
         'Authorization': `Bearer ${session.access_token}`,
         'Prefer': 'return=minimal'
       },
-      body: JSON.stringify({ baixado })
+      body: JSON.stringify({ baixado, data_pagamento })
+    });
+    if(!resp.ok) throw new Error('update failed');
+  }
+
+  async function updateTxnField(id, field, value){
+    const resp = await fetch(`${SUPABASE_URL}/rest/v1/financeiro?id=eq.${id}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${session.access_token}`,
+        'Prefer': 'return=minimal'
+      },
+      body: JSON.stringify({ [field]: value })
     });
     if(!resp.ok) throw new Error('update failed');
   }
@@ -404,11 +436,6 @@
     document.getElementById('totalEntradas').textContent = fmtMoney(entradas);
     document.getElementById('totalSaidas').textContent = fmtMoney(saidas);
     document.getElementById('saldoTotal').textContent = fmtMoney(entradas - saidas);
-
-    const pendentes = list.filter(t => !t.baixado);
-    const pendenteEntradas = pendentes.filter(t => t.tipo === 'entrada').reduce((s,t) => s + Number(t.valor), 0);
-    const pendenteSaidas = pendentes.filter(t => t.tipo === 'saida').reduce((s,t) => s + Number(t.valor), 0);
-    document.getElementById('totalPendente').textContent = fmtMoney(pendenteEntradas + pendenteSaidas);
   }
 
   function renderTxns(list){
@@ -420,12 +447,14 @@
       <table class="txn-table">
         <thead>
           <tr>
-            <th>Data</th>
+            <th>Vencimento</th>
             <th>Tipo</th>
             <th>Categoria</th>
             <th>Descrição</th>
             <th>Valor</th>
+            <th>Banco</th>
             <th>Status</th>
+            <th>Data pagto.</th>
             <th></th>
           </tr>
         </thead>
@@ -437,36 +466,65 @@
               <td>${escapeHtml(t.categoria) || '—'}</td>
               <td>${escapeHtml(t.descricao) || '—'}</td>
               <td class="valor-cell ${t.tipo}">${t.tipo === 'entrada' ? '+' : '−'} ${fmtMoney(t.valor)}</td>
+              <td><input type="text" class="banco-input" data-id="${t.id}" value="${escapeHtml(t.banco)}" placeholder="—"></td>
               <td>
-                <label class="baixa-toggle ${t.baixado?'is-baixado':''}">
-                  <input type="checkbox" class="baixa-check" data-id="${t.id}" ${t.baixado?'checked':''}>
-                  <span class="baixa-label">${t.baixado ? 'Baixado' : 'Pendente'}</span>
-                </label>
+                <select class="status-select ${t.baixado?'pago':'aberto'}" data-id="${t.id}">
+                  <option value="aberto" ${!t.baixado?'selected':''}>Em aberto</option>
+                  <option value="pago" ${t.baixado?'selected':''}>Pago</option>
+                </select>
               </td>
+              <td><input type="date" class="pagamento-input" data-id="${t.id}" value="${t.data_pagamento||''}" ${!t.baixado?'disabled':''}></td>
               <td><button class="del-btn" data-id="${t.id}" title="Excluir"><svg viewBox="0 0 24 24"><path d="M3 6h18M8 6V4a1 1 0 011-1h6a1 1 0 011 1v2m3 0-1 14a2 2 0 01-2 2H7a2 2 0 01-2-2L4 6"/></svg></button></td>
             </tr>
           `).join('')}
         </tbody>
       </table>
     `;
-    listArea.querySelectorAll('.baixa-check').forEach(chk => {
-      chk.addEventListener('change', async () => {
-        const id = chk.dataset.id;
-        const novoBaixado = chk.checked;
-        const label = chk.closest('.baixa-toggle');
-        chk.disabled = true;
+    listArea.querySelectorAll('.status-select').forEach(sel => {
+      sel.addEventListener('change', async () => {
+        const id = sel.dataset.id;
+        const t = allTxns.find(t => t.id === id);
+        const novoPago = sel.value === 'pago';
+        const row = sel.closest('tr');
+        const pagamentoInput = row.querySelector('.pagamento-input');
+        const dataPagamento = novoPago ? (pagamentoInput.value || t.data) : null;
+        sel.className = 'status-select ' + (novoPago ? 'pago' : 'aberto');
+        sel.disabled = true;
         try{
-          await updateTxnBaixado(id, novoBaixado);
-          const t = allTxns.find(t => t.id === id);
-          if(t) t.baixado = novoBaixado;
-          label.classList.toggle('is-baixado', novoBaixado);
-          label.querySelector('.baixa-label').textContent = novoBaixado ? 'Baixado' : 'Pendente';
+          await updateTxnStatus(id, novoPago, dataPagamento);
+          if(t){ t.baixado = novoPago; t.data_pagamento = dataPagamento; }
+          pagamentoInput.disabled = !novoPago;
+          pagamentoInput.value = dataPagamento || '';
           applyFilters();
         }catch(err){
-          chk.checked = !novoBaixado;
-          alert('Não foi possível atualizar. Tente novamente.');
+          sel.value = novoPago ? 'aberto' : 'pago';
+          alert('Não foi possível atualizar o status. Tente novamente.');
         }finally{
-          chk.disabled = false;
+          sel.disabled = false;
+        }
+      });
+    });
+    listArea.querySelectorAll('.pagamento-input').forEach(inp => {
+      inp.addEventListener('change', async () => {
+        const id = inp.dataset.id;
+        const t = allTxns.find(t => t.id === id);
+        try{
+          await updateTxnField(id, 'data_pagamento', inp.value || null);
+          if(t) t.data_pagamento = inp.value || null;
+        }catch(err){
+          alert('Não foi possível atualizar a data. Tente novamente.');
+        }
+      });
+    });
+    listArea.querySelectorAll('.banco-input').forEach(inp => {
+      inp.addEventListener('change', async () => {
+        const id = inp.dataset.id;
+        const t = allTxns.find(t => t.id === id);
+        try{
+          await updateTxnField(id, 'banco', inp.value || null);
+          if(t) t.banco = inp.value;
+        }catch(err){
+          alert('Não foi possível atualizar o banco. Tente novamente.');
         }
       });
     });
@@ -557,23 +615,39 @@
     });
   });
 
+  const txnStatusSelect = document.getElementById('txnStatus');
+  const txnDataPagamentoWrap = document.getElementById('txnDataPagamentoWrap');
+  const txnDataPagamentoInput = document.getElementById('txnDataPagamento');
+  txnStatusSelect.addEventListener('change', () => {
+    const isPago = txnStatusSelect.value === 'pago';
+    txnDataPagamentoWrap.style.display = isPago ? '' : 'none';
+    if(isPago && !txnDataPagamentoInput.value){
+      txnDataPagamentoInput.valueAsDate = new Date();
+    }
+  });
+
   document.getElementById('txnForm').addEventListener('submit', async function(e){
     e.preventDefault();
     const data = document.getElementById('txnData').value;
     const categoria = document.getElementById('txnCategoria').value;
     const descricao = document.getElementById('txnDescricao').value;
     const valor = document.getElementById('txnValor').value;
-    const baixado = document.getElementById('txnBaixado').checked;
+    const banco = document.getElementById('txnBanco').value;
+    const baixado = txnStatusSelect.value === 'pago';
+    const data_pagamento = baixado ? (txnDataPagamentoInput.value || data) : null;
     if(!data || !valor) return;
     try{
-      await createTxn({ data, tipo: currentTipo, categoria, descricao, valor: Number(valor), baixado });
+      await createTxn({ data, tipo: currentTipo, categoria, descricao, valor: Number(valor), banco, baixado, data_pagamento });
       allTxns = await fetchTxns();
       populateMonthFilter();
       applyFilters();
       document.getElementById('txnCategoria').value = '';
       document.getElementById('txnDescricao').value = '';
       document.getElementById('txnValor').value = '';
-      document.getElementById('txnBaixado').checked = false;
+      document.getElementById('txnBanco').value = '';
+      txnStatusSelect.value = 'aberto';
+      txnDataPagamentoWrap.style.display = 'none';
+      txnDataPagamentoInput.value = '';
     }catch(err){
       alert('Não foi possível salvar. Tente novamente.');
     }
