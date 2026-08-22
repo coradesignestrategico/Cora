@@ -397,7 +397,8 @@
         categoria: sale.servico || 'Venda',
         descricao: `Venda - ${sale.cliente}`,
         valor: sale.valor,
-        baixado: true
+        baixado: true,
+        data_pagamento: sale.data
       })
     });
     if(!resp.ok) throw new Error('financeiro create failed');
