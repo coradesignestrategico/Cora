@@ -93,7 +93,7 @@
   .head-row h1{font-size:1.9rem; font-weight:600;}
 
   /* Summary cards */
-  .summary-row{display:grid; grid-template-columns:repeat(5,1fr); gap:16px; margin-bottom:32px;}
+  .summary-row{display:grid; grid-template-columns:repeat(4,1fr); gap:16px; margin-bottom:32px;}
   .summary-card{
     background:var(--white); border-radius:var(--radius-md); padding:22px 22px;
     box-shadow:0 10px 26px rgba(36,21,52,.07);
@@ -149,11 +149,6 @@
   .status-select.aberto{background-color:rgba(255,198,41,.22); color:#8a6400;}
   .status-select.fechado{background-color:rgba(20,184,102,.14); color:var(--green);}
   .status-select.cancelado{background-color:rgba(228,54,74,.12); color:var(--red);}
-  .pago-toggle{display:flex; align-items:center; gap:8px; cursor:pointer; user-select:none;}
-  .pago-toggle input{width:17px; height:17px; accent-color:var(--green); cursor:pointer;}
-  .pago-toggle .pago-label{font-size:.8rem; font-weight:700; color:var(--ink-soft);}
-  .pago-toggle.is-pago .pago-label{color:var(--green);}
-  .pago-toggle.is-disabled{opacity:.4; pointer-events:none;}
   .del-btn{
     width:30px; height:30px; border-radius:50%; background:var(--cream); display:inline-flex;
     align-items:center; justify-content:center; transition:background .2s;
@@ -243,11 +238,6 @@
         <div class="s-label"><span class="status-dot cancelado"></span>Canceladas</div>
         <div class="s-value" id="canceladoCount">0</div>
         <div class="s-count" id="canceladoValue">R$ 0,00</div>
-      </div>
-      <div class="summary-card">
-        <div class="s-label"><span class="status-dot" style="background:var(--blue-deep)"></span>Recebido</div>
-        <div class="s-value" id="recebidoCount">0</div>
-        <div class="s-count" id="recebidoValue">R$ 0,00</div>
       </div>
     </div>
 
@@ -347,11 +337,13 @@
         'Content-Type': 'application/json',
         'apikey': SUPABASE_ANON_KEY,
         'Authorization': `Bearer ${session.access_token}`,
-        'Prefer': 'return=minimal'
+        'Prefer': 'return=representation'
       },
       body: JSON.stringify(sale)
     });
     if(!resp.ok) throw new Error('create failed');
+    const rows = await resp.json();
+    return rows[0];
   }
 
   async function updateSaleStatus(id, status){
@@ -382,6 +374,8 @@
     if(!resp.ok) throw new Error('update failed');
   }
 
+  // Toda venda lançada já cai no Financeiro como uma entrada "em aberto"
+  // (vencimento = data da venda). A baixa (pagamento) é feita lá, não aqui.
   async function createFinanceiroEntry(sale){
     const resp = await fetch(`${SUPABASE_URL}/rest/v1/financeiro`, {
       method: 'POST',
@@ -397,8 +391,7 @@
         categoria: sale.servico || 'Venda',
         descricao: `Venda - ${sale.cliente}`,
         valor: sale.valor,
-        baixado: true,
-        data_pagamento: sale.data
+        baixado: false
       })
     });
     if(!resp.ok) throw new Error('financeiro create failed');
@@ -415,34 +408,6 @@
       }
     });
     if(!resp.ok) throw new Error('financeiro delete failed');
-  }
-
-  async function setSalePago(id, pago){
-    const resp = await fetch(`${SUPABASE_URL}/rest/v1/vendas?id=eq.${id}`, {
-      method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        'apikey': SUPABASE_ANON_KEY,
-        'Authorization': `Bearer ${session.access_token}`,
-        'Prefer': 'return=minimal'
-      },
-      body: JSON.stringify({ pago })
-    });
-    if(!resp.ok) throw new Error('update failed');
-  }
-
-  // Mantém o Financeiro em sincronia: cria a entrada quando o pagamento é marcado
-  // como recebido, remove a entrada se deixar de estar recebido.
-  async function syncFinanceiro(sale, novoPago){
-    if(novoPago && !sale.financeiro_id){
-      const financeiro_id = await createFinanceiroEntry(sale);
-      await setSaleFinanceiroId(sale.id, financeiro_id);
-      sale.financeiro_id = financeiro_id;
-    } else if(!novoPago && sale.financeiro_id){
-      await deleteFinanceiroEntry(sale.financeiro_id);
-      await setSaleFinanceiroId(sale.id, null);
-      sale.financeiro_id = null;
-    }
   }
 
   async function deleteSale(id){
@@ -482,11 +447,6 @@
       document.getElementById(st+'Count').textContent = list.length;
       document.getElementById(st+'Value').textContent = fmtMoney(value);
     });
-
-    const recebidas = allSales.filter(s => s.pago);
-    const recebidoValue = recebidas.reduce((sum,s) => sum + Number(s.valor), 0);
-    document.getElementById('recebidoCount').textContent = recebidas.length;
-    document.getElementById('recebidoValue').textContent = fmtMoney(recebidoValue);
   }
 
   function renderSales(list){
@@ -503,7 +463,6 @@
             <th>Serviço</th>
             <th>Valor</th>
             <th>Status</th>
-            <th>Recebido</th>
             <th></th>
           </tr>
         </thead>
@@ -520,12 +479,6 @@
                   <option value="fechado" ${s.status==='fechado'?'selected':''}>Fechado</option>
                   <option value="cancelado" ${s.status==='cancelado'?'selected':''}>Cancelado</option>
                 </select>
-              </td>
-              <td>
-                <label class="pago-toggle ${s.pago?'is-pago':''} ${s.status!=='fechado'?'is-disabled':''}" title="${s.status!=='fechado' ? 'Só disponível para vendas fechadas' : ''}">
-                  <input type="checkbox" class="pago-check" data-id="${s.id}" ${s.pago?'checked':''} ${s.status!=='fechado'?'disabled':''}>
-                  <span class="pago-label">${s.pago ? 'Recebido' : 'Pendente'}</span>
-                </label>
               </td>
               <td><button class="del-btn" data-id="${s.id}" title="Excluir"><svg viewBox="0 0 24 24"><path d="M3 6h18M8 6V4a1 1 0 011-1h6a1 1 0 011 1v2m3 0-1 14a2 2 0 01-2 2H7a2 2 0 01-2-2L4 6"/></svg></button></td>
             </tr>
@@ -545,12 +498,12 @@
           await updateSaleStatus(id, newStatus);
           if(sale){
             sale.status = newStatus;
-            // Se a venda deixou de estar "fechado" e estava marcada como recebida,
-            // desfaz o recebimento e remove a entrada do Financeiro.
-            if(newStatus !== 'fechado' && sale.pago){
-              await setSalePago(id, false);
-              sale.pago = false;
-              await syncFinanceiro(sale, false);
+            // Se a venda foi cancelada, remove a entrada correspondente do Financeiro
+            // (ela deixou de ser uma receita esperada).
+            if(newStatus === 'cancelado' && sale.financeiro_id){
+              await deleteFinanceiroEntry(sale.financeiro_id);
+              await setSaleFinanceiroId(id, null);
+              sale.financeiro_id = null;
             }
           }
           updateSummary();
@@ -560,30 +513,6 @@
           alert('Não foi possível atualizar o status. Tente novamente.');
         }finally{
           sel.disabled = false;
-        }
-      });
-    });
-    listArea.querySelectorAll('.pago-check').forEach(chk => {
-      chk.addEventListener('change', async () => {
-        const id = chk.dataset.id;
-        const sale = allSales.find(s => s.id === id);
-        const novoPago = chk.checked;
-        const label = chk.closest('.pago-toggle');
-        chk.disabled = true;
-        try{
-          await setSalePago(id, novoPago);
-          if(sale){
-            sale.pago = novoPago;
-            await syncFinanceiro(sale, novoPago);
-          }
-          label.classList.toggle('is-pago', novoPago);
-          label.querySelector('.pago-label').textContent = novoPago ? 'Recebido' : 'Pendente';
-          updateSummary();
-        }catch(err){
-          chk.checked = !novoPago;
-          alert('Não foi possível atualizar. Tente novamente.');
-        }finally{
-          chk.disabled = false;
         }
       });
     });
@@ -665,7 +594,12 @@
     const status = document.getElementById('saleStatus').value;
     if(!cliente || !valor || !data) return;
     try{
-      await createSale({ cliente, servico, valor: Number(valor), data, status });
+      const newSale = await createSale({ cliente, servico, valor: Number(valor), data, status });
+      // Toda venda já lançada cai automaticamente no Financeiro como uma entrada em aberto.
+      if(status !== 'cancelado'){
+        const financeiro_id = await createFinanceiroEntry(newSale);
+        await setSaleFinanceiroId(newSale.id, financeiro_id);
+      }
       allSales = await fetchSales();
       updateSummary();
       applyFilters();
