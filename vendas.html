@@ -498,9 +498,14 @@
           await updateSaleStatus(id, newStatus);
           if(sale){
             sale.status = newStatus;
-            // Se a venda foi cancelada, remove a entrada correspondente do Financeiro
-            // (ela deixou de ser uma receita esperada).
-            if(newStatus === 'cancelado' && sale.financeiro_id){
+            if(newStatus === 'fechado' && !sale.financeiro_id){
+              // A venda fechou agora: cria a entrada no Financeiro.
+              const financeiro_id = await createFinanceiroEntry(sale);
+              await setSaleFinanceiroId(id, financeiro_id);
+              sale.financeiro_id = financeiro_id;
+            } else if(newStatus !== 'fechado' && sale.financeiro_id){
+              // Deixou de estar fechada (voltou pra aberto ou foi cancelada):
+              // remove a entrada correspondente do Financeiro.
               await deleteFinanceiroEntry(sale.financeiro_id);
               await setSaleFinanceiroId(id, null);
               sale.financeiro_id = null;
@@ -595,8 +600,8 @@
     if(!cliente || !valor || !data) return;
     try{
       const newSale = await createSale({ cliente, servico, valor: Number(valor), data, status });
-      // Toda venda já lançada cai automaticamente no Financeiro como uma entrada em aberto.
-      if(status !== 'cancelado'){
+      // Só cai no Financeiro se a venda já nascer como "Fechado".
+      if(status === 'fechado'){
         const financeiro_id = await createFinanceiroEntry(newSale);
         await setSaleFinanceiroId(newSale.id, financeiro_id);
       }
