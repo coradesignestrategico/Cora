@@ -358,6 +358,67 @@
     if(!resp.ok) throw new Error('update failed');
   }
 
+  async function setSaleFinanceiroId(id, financeiro_id){
+    const resp = await fetch(`${SUPABASE_URL}/rest/v1/vendas?id=eq.${id}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${session.access_token}`,
+        'Prefer': 'return=minimal'
+      },
+      body: JSON.stringify({ financeiro_id })
+    });
+    if(!resp.ok) throw new Error('update failed');
+  }
+
+  async function createFinanceiroEntry(sale){
+    const resp = await fetch(`${SUPABASE_URL}/rest/v1/financeiro`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${session.access_token}`,
+        'Prefer': 'return=representation'
+      },
+      body: JSON.stringify({
+        data: sale.data,
+        tipo: 'entrada',
+        categoria: sale.servico || 'Venda',
+        descricao: `Venda - ${sale.cliente}`,
+        valor: sale.valor
+      })
+    });
+    if(!resp.ok) throw new Error('financeiro create failed');
+    const rows = await resp.json();
+    return rows[0].id;
+  }
+
+  async function deleteFinanceiroEntry(financeiro_id){
+    const resp = await fetch(`${SUPABASE_URL}/rest/v1/financeiro?id=eq.${financeiro_id}`, {
+      method: 'DELETE',
+      headers: {
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${session.access_token}`
+      }
+    });
+    if(!resp.ok) throw new Error('financeiro delete failed');
+  }
+
+  // Mantém o Financeiro em sincronia: cria a entrada quando a venda vira "fechado",
+  // remove a entrada se deixar de ser "fechado".
+  async function syncFinanceiro(sale, newStatus){
+    if(newStatus === 'fechado' && !sale.financeiro_id){
+      const financeiro_id = await createFinanceiroEntry(sale);
+      await setSaleFinanceiroId(sale.id, financeiro_id);
+      sale.financeiro_id = financeiro_id;
+    } else if(newStatus !== 'fechado' && sale.financeiro_id){
+      await deleteFinanceiroEntry(sale.financeiro_id);
+      await setSaleFinanceiroId(sale.id, null);
+      sale.financeiro_id = null;
+    }
+  }
+
   async function deleteSale(id){
     const resp = await fetch(`${SUPABASE_URL}/rest/v1/vendas?id=eq.${id}`, {
       method: 'DELETE',
@@ -438,14 +499,22 @@
       sel.addEventListener('change', async () => {
         const id = sel.dataset.id;
         const newStatus = sel.value;
+        const sale = allSales.find(s => s.id === id);
+        const previousClass = sel.className;
         sel.className = 'status-select ' + newStatus;
+        sel.disabled = true;
         try{
           await updateSaleStatus(id, newStatus);
-          const sale = allSales.find(s => s.id === id);
-          if(sale) sale.status = newStatus;
+          if(sale){
+            sale.status = newStatus;
+            await syncFinanceiro(sale, newStatus);
+          }
           updateSummary();
         }catch(err){
+          sel.className = previousClass;
           alert('Não foi possível atualizar o status. Tente novamente.');
+        }finally{
+          sel.disabled = false;
         }
       });
     });
@@ -453,6 +522,10 @@
       btn.addEventListener('click', async () => {
         if(!confirm('Excluir esta venda?')) return;
         try{
+          const sale = allSales.find(s => s.id === btn.dataset.id);
+          if(sale && sale.financeiro_id){
+            await deleteFinanceiroEntry(sale.financeiro_id);
+          }
           await deleteSale(btn.dataset.id);
           allSales = allSales.filter(s => s.id !== btn.dataset.id);
           updateSummary();
@@ -525,6 +598,10 @@
     try{
       await createSale({ cliente, servico, valor: Number(valor), data, status });
       allSales = await fetchSales();
+      if(status === 'fechado'){
+        const newSale = allSales.find(s => s.cliente === cliente && s.data === data && Number(s.valor) === Number(valor) && !s.financeiro_id);
+        if(newSale) await syncFinanceiro(newSale, 'fechado');
+      }
       updateSummary();
       applyFilters();
       document.getElementById('saleCliente').value = '';
