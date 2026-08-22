@@ -43,7 +43,7 @@
     display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:14px;
   }
   .topbar .brand{display:flex; align-items:center; gap:16px;}
-  .topbar .brand-logo{height:32px; width:auto; object-fit:contain; display:block; filter:brightness(0) invert(1);}
+  .topbar .brand-logo{height:32px; width:auto; object-fit:contain; display:block;}
   .topbar .sub{color:rgba(255,255,255,.75); font-size:.82rem; font-weight:700;}
   .topbar-right{display:flex; align-items:center; gap:10px; flex-wrap:wrap;}
   .nav-pill{
@@ -197,7 +197,7 @@
   #pdfRoot{position:fixed; left:-9999px; top:0; width:794px; background:var(--white);}
   .pdf-page{width:794px; min-height:1123px; background:var(--white); font-family:'Manrope',sans-serif; color:var(--ink); position:relative; padding-bottom:120px;}
   .pdf-header{background:var(--pink); padding:44px 56px 38px; position:relative; overflow:hidden;}
-  .pdf-header img{height:34px; filter:brightness(0) invert(1); margin-bottom:26px;}
+  .pdf-header img{height:34px; margin-bottom:26px;}
   .pdf-header .pdf-eyebrow{color:var(--yellow); font-weight:700; letter-spacing:.12em; text-transform:uppercase; font-size:.72rem; margin-bottom:10px;}
   .pdf-header h1{color:var(--white); font-family:'Fredoka'; font-weight:600; font-size:2.1rem; line-height:1.15;}
   .pdf-header .pdf-num{position:absolute; top:44px; right:56px; color:rgba(255,255,255,.75); font-weight:700; font-size:.82rem;}
@@ -219,7 +219,7 @@
   .pdf-terms .v{font-size:.92rem; font-weight:700;}
   .pdf-footer{position:absolute; bottom:0; left:0; right:0; background:var(--ink); color:rgba(255,255,255,.8); padding:22px 56px; display:flex; align-items:center; justify-content:space-between; font-size:.78rem;}
   .pdf-footer .brand-mini{display:flex; align-items:center; gap:8px; color:var(--white); font-weight:700;}
-  .pdf-footer .brand-mini img{height:16px; filter:brightness(0) invert(1);}
+  .pdf-footer .brand-mini img{height:16px;}
 
   @media (max-width:900px){
     .form-row2, .form-row3{grid-template-columns:1fr;}
@@ -476,7 +476,10 @@
       },
       body: JSON.stringify(prop)
     });
-    if(!resp.ok) throw new Error('create failed');
+    if(!resp.ok){
+      const errText = await resp.text().catch(()=> '');
+      throw new Error('create failed: ' + errText);
+    }
     const rows = await resp.json();
     return rows[0];
   }
@@ -490,7 +493,10 @@
       },
       body: JSON.stringify(prop)
     });
-    if(!resp.ok) throw new Error('update failed');
+    if(!resp.ok){
+      const errText = await resp.text().catch(()=> '');
+      throw new Error('update failed: ' + errText);
+    }
     const rows = await resp.json();
     return rows[0];
   }
@@ -532,10 +538,15 @@
     row.querySelector('.item-del').addEventListener('click', () => { row.remove(); updateTotalDisplay(); });
     row.querySelector('.item-valor').addEventListener('input', updateTotalDisplay);
   }
+  function parseValor(v){
+    if(v === '' || v == null) return 0;
+    const n = Number(String(v).replace(',', '.'));
+    return isNaN(n) ? 0 : n;
+  }
   function getItensFromForm(){
     return [...itensList.querySelectorAll('.item-row')].map(row => ({
       descricao: row.querySelector('.item-desc').value,
-      valor: Number(row.querySelector('.item-valor').value || 0)
+      valor: parseValor(row.querySelector('.item-valor').value)
     })).filter(i => i.descricao || i.valor);
   }
   function updateTotalDisplay(){
@@ -775,7 +786,7 @@
   document.getElementById('propForm').addEventListener('submit', async function(e){
     e.preventDefault();
     const data = gatherFormData();
-    if(!data.cliente) return;
+    if(!data.cliente){ alert('Preencha ao menos o nome do cliente.'); return; }
     const btn = document.getElementById('saveBtn');
     btn.disabled = true;
     try{
@@ -790,7 +801,7 @@
       applyFilters();
       closeModal();
     }catch(err){
-      alert('Não foi possível salvar. Tente novamente.');
+      alert('Não foi possível salvar: ' + err.message);
     }finally{
       btn.disabled = false;
     }
@@ -813,7 +824,7 @@
       closeModal();
       await gerarPdf(saved);
     }catch(err){
-      alert('Não foi possível salvar. Tente novamente.');
+      alert('Não foi possível salvar: ' + err.message);
     }finally{
       this.disabled = false;
     }
