@@ -346,6 +346,57 @@
   }
   function clearSession(){ sessionStorage.removeItem('cora_session'); }
 
+  function forceLogout(msg){
+    clearSession();
+    session = null;
+    dashboard.classList.add('hidden');
+    loginWrap.classList.remove('hidden');
+    if(msg){
+      const errorMsg = document.getElementById('loginError');
+      errorMsg.textContent = msg;
+      errorMsg.style.display = 'block';
+    }
+  }
+
+  async function refreshAccessToken(){
+    if(!session || !session.refresh_token) return false;
+    try{
+      const resp = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON_KEY },
+        body: JSON.stringify({ refresh_token: session.refresh_token })
+      });
+      if(!resp.ok) return false;
+      const data = await resp.json();
+      session = data;
+      saveSession(session);
+      return true;
+    }catch(e){
+      return false;
+    }
+  }
+
+  async function authFetch(url, init={}){
+    function withAuth(base){
+      const headers = Object.assign({}, base.headers, {
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${session.access_token}`
+      });
+      return Object.assign({}, base, { headers });
+    }
+    let resp = await fetch(url, withAuth(init));
+    if(resp.status === 401){
+      const ok = await refreshAccessToken();
+      if(ok){
+        resp = await fetch(url, withAuth(init));
+      } else {
+        forceLogout('Sua sessão expirou. Entre novamente.');
+        throw new Error('SESSAO_EXPIRADA');
+      }
+    }
+    return resp;
+  }
+
   async function login(email, password){
     const resp = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
       method: 'POST',
@@ -357,66 +408,40 @@
   }
 
   async function fetchTxns(){
-    const resp = await fetch(`${SUPABASE_URL}/rest/v1/financeiro?select=*&order=data.desc,criado_em.desc`, {
-      headers: {
-        'apikey': SUPABASE_ANON_KEY,
-        'Authorization': `Bearer ${session.access_token}`
-      }
-    });
+    const resp = await authFetch(`${SUPABASE_URL}/rest/v1/financeiro?select=*&order=data.desc,criado_em.desc`);
     if(!resp.ok) throw new Error('fetch failed');
     return resp.json();
   }
 
   async function createTxn(txn){
-    const resp = await fetch(`${SUPABASE_URL}/rest/v1/financeiro`, {
+    const resp = await authFetch(`${SUPABASE_URL}/rest/v1/financeiro`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'apikey': SUPABASE_ANON_KEY,
-        'Authorization': `Bearer ${session.access_token}`,
-        'Prefer': 'return=minimal'
-      },
+      headers: { 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
       body: JSON.stringify(txn)
     });
     if(!resp.ok) throw new Error('create failed');
   }
 
   async function updateTxnStatus(id, baixado, data_pagamento){
-    const resp = await fetch(`${SUPABASE_URL}/rest/v1/financeiro?id=eq.${id}`, {
+    const resp = await authFetch(`${SUPABASE_URL}/rest/v1/financeiro?id=eq.${id}`, {
       method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        'apikey': SUPABASE_ANON_KEY,
-        'Authorization': `Bearer ${session.access_token}`,
-        'Prefer': 'return=minimal'
-      },
+      headers: { 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
       body: JSON.stringify({ baixado, data_pagamento })
     });
     if(!resp.ok) throw new Error('update failed');
   }
 
   async function updateTxnField(id, field, value){
-    const resp = await fetch(`${SUPABASE_URL}/rest/v1/financeiro?id=eq.${id}`, {
+    const resp = await authFetch(`${SUPABASE_URL}/rest/v1/financeiro?id=eq.${id}`, {
       method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        'apikey': SUPABASE_ANON_KEY,
-        'Authorization': `Bearer ${session.access_token}`,
-        'Prefer': 'return=minimal'
-      },
+      headers: { 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
       body: JSON.stringify({ [field]: value })
     });
     if(!resp.ok) throw new Error('update failed');
   }
 
   async function deleteTxn(id){
-    const resp = await fetch(`${SUPABASE_URL}/rest/v1/financeiro?id=eq.${id}`, {
-      method: 'DELETE',
-      headers: {
-        'apikey': SUPABASE_ANON_KEY,
-        'Authorization': `Bearer ${session.access_token}`
-      }
-    });
+    const resp = await authFetch(`${SUPABASE_URL}/rest/v1/financeiro?id=eq.${id}`, { method: 'DELETE' });
     if(!resp.ok) throw new Error('delete failed');
   }
 
@@ -595,6 +620,7 @@
       saveSession(session);
       await loadDashboard();
     }catch(err){
+      errorMsg.textContent = 'E-mail ou senha incorretos.';
       errorMsg.style.display = 'block';
     }finally{
       btn.disabled = false; btn.textContent = 'Entrar';
