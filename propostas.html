@@ -449,6 +449,59 @@
   }
   function clearSession(){ sessionStorage.removeItem('cora_session'); }
 
+  function forceLogout(msg){
+    clearSession();
+    session = null;
+    dashboard.classList.add('hidden');
+    loginWrap.classList.remove('hidden');
+    if(msg){
+      const errorMsg = document.getElementById('loginError');
+      errorMsg.textContent = msg;
+      errorMsg.style.display = 'block';
+    }
+  }
+
+  async function refreshAccessToken(){
+    if(!session || !session.refresh_token) return false;
+    try{
+      const resp = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON_KEY },
+        body: JSON.stringify({ refresh_token: session.refresh_token })
+      });
+      if(!resp.ok) return false;
+      const data = await resp.json();
+      session = data;
+      saveSession(session);
+      return true;
+    }catch(e){
+      return false;
+    }
+  }
+
+  // Envolve toda chamada autenticada: se o login expirou, tenta renovar sozinho
+  // e repete a chamada; se não conseguir, manda a pessoa de volta pro login.
+  async function authFetch(url, init={}){
+    function withAuth(base){
+      const headers = Object.assign({}, base.headers, {
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${session.access_token}`
+      });
+      return Object.assign({}, base, { headers });
+    }
+    let resp = await fetch(url, withAuth(init));
+    if(resp.status === 401){
+      const ok = await refreshAccessToken();
+      if(ok){
+        resp = await fetch(url, withAuth(init));
+      } else {
+        forceLogout('Sua sessão expirou. Entre novamente.');
+        throw new Error('SESSAO_EXPIRADA');
+      }
+    }
+    return resp;
+  }
+
   async function login(email, password){
     const resp = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
       method: 'POST',
@@ -460,20 +513,15 @@
   }
 
   async function fetchProps(){
-    const resp = await fetch(`${SUPABASE_URL}/rest/v1/propostas?select=*&order=criado_em.desc`, {
-      headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${session.access_token}` }
-    });
+    const resp = await authFetch(`${SUPABASE_URL}/rest/v1/propostas?select=*&order=criado_em.desc`);
     if(!resp.ok) throw new Error('fetch failed');
     return resp.json();
   }
 
   async function createProp(prop){
-    const resp = await fetch(`${SUPABASE_URL}/rest/v1/propostas`, {
+    const resp = await authFetch(`${SUPABASE_URL}/rest/v1/propostas`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json', 'apikey': SUPABASE_ANON_KEY,
-        'Authorization': `Bearer ${session.access_token}`, 'Prefer': 'return=representation'
-      },
+      headers: { 'Content-Type': 'application/json', 'Prefer': 'return=representation' },
       body: JSON.stringify(prop)
     });
     if(!resp.ok){
@@ -485,12 +533,9 @@
   }
 
   async function updateProp(id, prop){
-    const resp = await fetch(`${SUPABASE_URL}/rest/v1/propostas?id=eq.${id}`, {
+    const resp = await authFetch(`${SUPABASE_URL}/rest/v1/propostas?id=eq.${id}`, {
       method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json', 'apikey': SUPABASE_ANON_KEY,
-        'Authorization': `Bearer ${session.access_token}`, 'Prefer': 'return=representation'
-      },
+      headers: { 'Content-Type': 'application/json', 'Prefer': 'return=representation' },
       body: JSON.stringify(prop)
     });
     if(!resp.ok){
@@ -502,10 +547,7 @@
   }
 
   async function deleteProp(id){
-    const resp = await fetch(`${SUPABASE_URL}/rest/v1/propostas?id=eq.${id}`, {
-      method: 'DELETE',
-      headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${session.access_token}` }
-    });
+    const resp = await authFetch(`${SUPABASE_URL}/rest/v1/propostas?id=eq.${id}`, { method: 'DELETE' });
     if(!resp.ok) throw new Error('delete failed');
   }
 
@@ -698,7 +740,7 @@
           const p = allProps.find(p => p.id === id);
           if(p) p.status = novoStatus;
         }catch(err){
-          alert('Não foi possível atualizar o status. Tente novamente.');
+          showErrorUnlessExpired(err, 'Não foi possível atualizar o status');
         }finally{
           sel.disabled = false;
         }
@@ -724,7 +766,7 @@
           allProps = allProps.filter(p => p.id !== btn.dataset.id);
           applyFilters();
         }catch(err){
-          alert('Não foi possível excluir. Tente novamente.');
+          showErrorUnlessExpired(err, 'Não foi possível excluir');
         }
       });
     });
@@ -739,6 +781,11 @@
       return matchesStatus && matchesQ;
     });
     renderProps(filtered);
+  }
+
+  function showErrorUnlessExpired(err, fallback){
+    if(err && err.message === 'SESSAO_EXPIRADA') return;
+    alert(fallback + (err && err.message ? ': ' + err.message : ''));
   }
 
   async function loadDashboard(){
@@ -765,6 +812,7 @@
       saveSession(session);
       await loadDashboard();
     }catch(err){
+      errorMsg.textContent = 'E-mail ou senha incorretos.';
       errorMsg.style.display = 'block';
     }finally{
       btn.disabled = false; btn.textContent = 'Entrar';
@@ -801,7 +849,7 @@
       applyFilters();
       closeModal();
     }catch(err){
-      alert('Não foi possível salvar: ' + err.message);
+      showErrorUnlessExpired(err, 'Não foi possível salvar');
     }finally{
       btn.disabled = false;
     }
@@ -824,7 +872,7 @@
       closeModal();
       await gerarPdf(saved);
     }catch(err){
-      alert('Não foi possível salvar: ' + err.message);
+      showErrorUnlessExpired(err, 'Não foi possível salvar');
     }finally{
       this.disabled = false;
     }
