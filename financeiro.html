@@ -103,6 +103,7 @@
   .summary-card.entradas .s-value{color:var(--green);}
   .summary-card.saidas .s-value{color:var(--red);}
   .summary-card.saldo .s-value{color:var(--blue-deep);}
+  .summary-card.pendente .s-value{color:var(--yellow-deep, #B8860B);}
 
   /* Form */
   .form-card{
@@ -119,6 +120,13 @@
   }
   .type-btn.active.entrada{background:var(--green); border-color:var(--green); color:var(--white);}
   .type-btn.active.saida{background:var(--red); border-color:var(--red); color:var(--white);}
+  .baixado-check-wrap{display:flex; align-items:center; gap:9px; margin-top:16px; cursor:pointer; user-select:none;}
+  .baixado-check-wrap input{width:17px; height:17px; accent-color:var(--blue); cursor:pointer;}
+  .baixado-check-wrap span{font-size:.85rem; color:var(--ink-soft); font-weight:600;}
+  .baixa-toggle{display:flex; align-items:center; gap:8px; cursor:pointer; user-select:none;}
+  .baixa-toggle input{width:17px; height:17px; accent-color:var(--green); cursor:pointer;}
+  .baixa-toggle .baixa-label{font-size:.78rem; font-weight:700; padding:5px 12px; border-radius:999px; background:rgba(255,198,41,.22); color:#8a6400;}
+  .baixa-toggle.is-baixado .baixa-label{background:rgba(20,184,102,.14); color:var(--green);}
   .add-btn{
     background:var(--blue); color:var(--white); padding:13px 22px; border-radius:14px;
     font-weight:700; font-size:.9rem; white-space:nowrap; transition:background .3s;
@@ -232,6 +240,10 @@
         <div class="s-label">Saldo</div>
         <div class="s-value" id="saldoTotal">R$ 0,00</div>
       </div>
+      <div class="summary-card pendente">
+        <div class="s-label">Pendente de baixa</div>
+        <div class="s-value" id="totalPendente">R$ 0,00</div>
+      </div>
     </div>
 
     <div class="form-card">
@@ -263,6 +275,10 @@
           </div>
           <button type="submit" class="add-btn">Adicionar</button>
         </div>
+        <label class="baixado-check-wrap">
+          <input type="checkbox" id="txnBaixado">
+          <span>Já foi baixado (dinheiro já entrou/saiu de fato)</span>
+        </label>
       </form>
     </div>
 
@@ -274,6 +290,11 @@
         <option value="">Entradas e saídas</option>
         <option value="entrada">Só entradas</option>
         <option value="saida">Só saídas</option>
+      </select>
+      <select id="filterBaixado">
+        <option value="">Pendentes e baixados</option>
+        <option value="pendente">Só pendentes</option>
+        <option value="baixado">Só baixados</option>
       </select>
       <input type="text" id="searchInput" placeholder="Buscar por categoria ou descrição...">
     </div>
@@ -297,6 +318,7 @@
   const listArea = document.getElementById('listArea');
   const filterMes = document.getElementById('filterMes');
   const filterTipo = document.getElementById('filterTipo');
+  const filterBaixado = document.getElementById('filterBaixado');
   const searchInput = document.getElementById('searchInput');
 
   function saveSession(s){ sessionStorage.setItem('cora_session', JSON.stringify(s)); }
@@ -340,6 +362,20 @@
     if(!resp.ok) throw new Error('create failed');
   }
 
+  async function updateTxnBaixado(id, baixado){
+    const resp = await fetch(`${SUPABASE_URL}/rest/v1/financeiro?id=eq.${id}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${session.access_token}`,
+        'Prefer': 'return=minimal'
+      },
+      body: JSON.stringify({ baixado })
+    });
+    if(!resp.ok) throw new Error('update failed');
+  }
+
   async function deleteTxn(id){
     const resp = await fetch(`${SUPABASE_URL}/rest/v1/financeiro?id=eq.${id}`, {
       method: 'DELETE',
@@ -368,6 +404,11 @@
     document.getElementById('totalEntradas').textContent = fmtMoney(entradas);
     document.getElementById('totalSaidas').textContent = fmtMoney(saidas);
     document.getElementById('saldoTotal').textContent = fmtMoney(entradas - saidas);
+
+    const pendentes = list.filter(t => !t.baixado);
+    const pendenteEntradas = pendentes.filter(t => t.tipo === 'entrada').reduce((s,t) => s + Number(t.valor), 0);
+    const pendenteSaidas = pendentes.filter(t => t.tipo === 'saida').reduce((s,t) => s + Number(t.valor), 0);
+    document.getElementById('totalPendente').textContent = fmtMoney(pendenteEntradas + pendenteSaidas);
   }
 
   function renderTxns(list){
@@ -384,6 +425,7 @@
             <th>Categoria</th>
             <th>Descrição</th>
             <th>Valor</th>
+            <th>Status</th>
             <th></th>
           </tr>
         </thead>
@@ -395,12 +437,39 @@
               <td>${escapeHtml(t.categoria) || '—'}</td>
               <td>${escapeHtml(t.descricao) || '—'}</td>
               <td class="valor-cell ${t.tipo}">${t.tipo === 'entrada' ? '+' : '−'} ${fmtMoney(t.valor)}</td>
+              <td>
+                <label class="baixa-toggle ${t.baixado?'is-baixado':''}">
+                  <input type="checkbox" class="baixa-check" data-id="${t.id}" ${t.baixado?'checked':''}>
+                  <span class="baixa-label">${t.baixado ? 'Baixado' : 'Pendente'}</span>
+                </label>
+              </td>
               <td><button class="del-btn" data-id="${t.id}" title="Excluir"><svg viewBox="0 0 24 24"><path d="M3 6h18M8 6V4a1 1 0 011-1h6a1 1 0 011 1v2m3 0-1 14a2 2 0 01-2 2H7a2 2 0 01-2-2L4 6"/></svg></button></td>
             </tr>
           `).join('')}
         </tbody>
       </table>
     `;
+    listArea.querySelectorAll('.baixa-check').forEach(chk => {
+      chk.addEventListener('change', async () => {
+        const id = chk.dataset.id;
+        const novoBaixado = chk.checked;
+        const label = chk.closest('.baixa-toggle');
+        chk.disabled = true;
+        try{
+          await updateTxnBaixado(id, novoBaixado);
+          const t = allTxns.find(t => t.id === id);
+          if(t) t.baixado = novoBaixado;
+          label.classList.toggle('is-baixado', novoBaixado);
+          label.querySelector('.baixa-label').textContent = novoBaixado ? 'Baixado' : 'Pendente';
+          applyFilters();
+        }catch(err){
+          chk.checked = !novoBaixado;
+          alert('Não foi possível atualizar. Tente novamente.');
+        }finally{
+          chk.disabled = false;
+        }
+      });
+    });
     listArea.querySelectorAll('.del-btn').forEach(btn => {
       btn.addEventListener('click', async () => {
         if(!confirm('Excluir este lançamento?')) return;
@@ -419,12 +488,14 @@
   function applyFilters(){
     const mes = filterMes.value;
     const tipo = filterTipo.value;
+    const baixado = filterBaixado.value;
     const q = searchInput.value.trim().toLowerCase();
     const filtered = allTxns.filter(t => {
       const matchesMes = !mes || t.data.slice(0,7) === mes;
       const matchesTipo = !tipo || t.tipo === tipo;
+      const matchesBaixado = !baixado || (baixado === 'baixado' ? t.baixado : !t.baixado);
       const matchesQ = !q || [t.categoria, t.descricao].some(f => (f||'').toLowerCase().includes(q));
-      return matchesMes && matchesTipo && matchesQ;
+      return matchesMes && matchesTipo && matchesBaixado && matchesQ;
     });
     updateSummary(filtered);
     renderTxns(filtered);
@@ -492,15 +563,17 @@
     const categoria = document.getElementById('txnCategoria').value;
     const descricao = document.getElementById('txnDescricao').value;
     const valor = document.getElementById('txnValor').value;
+    const baixado = document.getElementById('txnBaixado').checked;
     if(!data || !valor) return;
     try{
-      await createTxn({ data, tipo: currentTipo, categoria, descricao, valor: Number(valor) });
+      await createTxn({ data, tipo: currentTipo, categoria, descricao, valor: Number(valor), baixado });
       allTxns = await fetchTxns();
       populateMonthFilter();
       applyFilters();
       document.getElementById('txnCategoria').value = '';
       document.getElementById('txnDescricao').value = '';
       document.getElementById('txnValor').value = '';
+      document.getElementById('txnBaixado').checked = false;
     }catch(err){
       alert('Não foi possível salvar. Tente novamente.');
     }
@@ -508,6 +581,7 @@
 
   filterMes.addEventListener('change', applyFilters);
   filterTipo.addEventListener('change', applyFilters);
+  filterBaixado.addEventListener('change', applyFilters);
   searchInput.addEventListener('input', applyFilters);
 
   (function init(){
